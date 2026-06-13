@@ -1,6 +1,6 @@
 # Spotube FLAC Audio Plugin
 
-An audio source plugin for [Spotube](https://spotube.app) that downloads and streams music in **FLAC lossless** and **MP3 320kbps** via flacdownloader.com.
+An audio source plugin for [Spotube](https://spotube.cc) that downloads and streams music in **FLAC lossless** and **MP3 320kbps** via flacdownloader.com.
 
 ## Features
 
