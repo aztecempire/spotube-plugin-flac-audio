@@ -6,12 +6,6 @@ var HttpResponse = std.HttpResponse
 
 var DOWNLOAD_SECRET = "l@p*gute)77=g5clebcp4lz#=x%(*rwg+ku0_)bh=&%6wg!a"
 var ANDROID_UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
-var UAS = [
-  "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Mobile Safari/537.36",
-  "Mozilla/5.0 (Linux; Android 14; iPhone 15 Pro Max) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-]
 
 fun normalizeTitle(title: String) -> String {
   if (title == null) return ""
@@ -58,10 +52,8 @@ class Converter {
 
 class AudioSourceEndpoint {
   var api: HttpClient
-  var uaIndex: num
 
   construct (this.api) {
-    this.uaIndex = 0
   }
 
   get supportedPresets -> List {
@@ -83,12 +75,6 @@ class AudioSourceEndpoint {
     ]
   }
 
-  fun rotateUA() -> String {
-    var ua = UAS[uaIndex]
-    uaIndex = (uaIndex + 1) % UAS.length
-    return ua
-  }
-
   fun searchRaw(query: String) -> Future {
     if (query == null || query.isEmpty) return Future.value(null)
     return api.get_req(
@@ -96,7 +82,7 @@ class AudioSourceEndpoint {
       queryParameters: { "query": query }.toJson(),
       options: RequestOptions(
         headers: {
-          "User-Agent": rotateUA(),
+          "User-Agent": ANDROID_UA,
           "Referer": "https://flacdownloader.com/",
           "Origin": "https://flacdownloader.com",
         }.toJson(),
@@ -159,7 +145,7 @@ class AudioSourceEndpoint {
       options: RequestOptions(
         headers: {
           "X-Download-Access": DOWNLOAD_SECRET,
-          "User-Agent": rotateUA(),
+          "User-Agent": ANDROID_UA,
           "Referer": "https://flacdownloader.com/",
           "Origin": "https://flacdownloader.com",
         }.toJson(),
