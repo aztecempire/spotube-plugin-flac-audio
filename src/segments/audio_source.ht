@@ -87,6 +87,7 @@ class AudioSourceEndpoint {
         type: "lossless",
         name: "flac",
         qualities: [
+          { bitDepth: 24, sampleRate: 192000 },
           { bitDepth: 24, sampleRate: 96000 },
           { bitDepth: 24, sampleRate: 48000 },
           { bitDepth: 16, sampleRate: 44100 },
@@ -97,9 +98,6 @@ class AudioSourceEndpoint {
         type: "lossy",
         name: "mp3",
         qualities: [
-          { bitrate: 320000 },
-          { bitrate: 320000 },
-          { bitrate: 320000 },
           { bitrate: 320000 },
         ],
       }.toJson(),
