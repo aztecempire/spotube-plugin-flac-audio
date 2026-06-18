@@ -180,8 +180,6 @@ class AudioSourceEndpoint {
       }
       for (var d in deezerData) {
         var title = d["title"] ?? ""
-        var deezerArtist = (d["artist"] is Map) ? (d["artist"]["name"] ?? "") : (d["artist"] ?? "").toString()
-        if (!artistMatches(firstArtist, deezerArtist)) continue
         if (!titleMatches(trackName, title)) continue
         var isrc = d["isrc"] ?? ""
         if (isrc.isNotEmpty) {
@@ -203,25 +201,6 @@ class AudioSourceEndpoint {
     ).then((res) {
       if (res.statusCode != 200 || res.data == null || res.data["t"] == null) return null
       return res.data["t"]
-    })
-  }
-
-  fun checkFormats(qobuzUrl: String) -> Future {
-    if (qobuzUrl == null || qobuzUrl.isEmpty) return Future.value([])
-    return api.get_req(
-      "/api/qobuz/formats",
-      queryParameters: { "url": qobuzUrl }.toJson(),
-    ).then((res) {
-      if (res.statusCode != 200 || res.data == null) return []
-      if (res.data["formats"] == null) return []
-      var ids = res.data["formats"].map((f) { return f["formatId"] }).toList()
-      ids = ids.where((id) { return id != null }).toList()
-      ids.sort((a, b) {
-        if (a > b) return -1
-        if (a < b) return 1
-        return 0
-      })
-      return ids
     })
   }
 
@@ -250,24 +229,13 @@ class AudioSourceEndpoint {
       })
     }
 
-    return checkFormats(qobuzUrl).then((formatIds) {
-      if (formatIds == null || formatIds.isEmpty) return null
-      var flacIds = formatIds.where((id) { return id != 5 }).toList()
-      var fallbackIds = formatIds.sublist(0)
-      if (flacIds.isNotEmpty) {
-        fallbackIds = flacIds
-      }
-      var targetId = fallbackIds[0]
-      var remaining = fallbackIds.sublist(1)
-
-      return getToken().then((token) {
-        if (token == null) return null
-        return queueAttempt(qobuzUrl, title, artist, token, targetId, remaining)
-      })
+    return getToken().then((token) {
+      if (token == null) return null
+      return queueAttempt(qobuzUrl, title, artist, token, 7)
     })
   }
 
-  fun queueAttempt(url: String, title: String, artist: String, token: String, formatId: int, fallbackFormats: List) -> Map {
+  fun queueAttempt(url: String, title: String, artist: String, token: String, formatId: int) -> Map {
     var hdrs = {
       "content-type": "application/json",
       "accept": "application/json, text/plain, */*",
@@ -286,11 +254,7 @@ class AudioSourceEndpoint {
       options: RequestOptions(headers: hdrs),
     ).then((queueRes) {
       if (queueRes.statusCode != 200 || queueRes.data == null || queueRes.data["id"] == null) {
-        if (fallbackFormats != null && fallbackFormats.isNotEmpty) {
-          var nextId = fallbackFormats[0]
-          var rest = fallbackFormats.sublist(1)
-          return queueAttempt(url, title, artist, token, nextId, rest)
-        }
+        if (formatId == 7) return queueAttempt(url, title, artist, token, 6)
         return null
       }
       return pollJob(queueRes.data["id"], 120, formatId)
@@ -369,16 +333,11 @@ class AudioSourceEndpoint {
       if (flacStream != null) result.add(flacStream)
       if (url.isEmpty) return result.isEmpty ? [null] : result
 
-      return checkFormats(url).then((formatIds) {
-        if (formatIds == null || !formatIds.contains(5)) {
+      return getToken().then((token) {
+        if (token == null) return result.isEmpty ? [null] : result
+        return queueAttempt(url, title, artist, token, 5).then((mp3Stream) {
+          if (mp3Stream != null) result.add(mp3Stream)
           return result.isEmpty ? [null] : result
-        }
-        return getToken().then((token) {
-          if (token == null) return result.isEmpty ? [null] : result
-          return queueAttempt(url, title, artist, token, 5, []).then((mp3Stream) {
-            if (mp3Stream != null) result.add(mp3Stream)
-            return result.isEmpty ? [null] : result
-          })
         })
       })
     })
