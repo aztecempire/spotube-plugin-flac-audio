@@ -118,6 +118,13 @@ class AudioSourceEndpoint {
     })
   }
 
+  fun trySearch(query: String) -> Future {
+    return searchRaw(query).then((data) {
+      if (data == null || data.isEmpty) return null
+      return Converter.toSpotubeMatchObject(data)
+    })
+  }
+
   fun searchRawDeezer(query: String) -> Future {
     if (query == null || query.isEmpty) return Future.value(null)
     return deezerApi.get_req(
@@ -126,6 +133,31 @@ class AudioSourceEndpoint {
     ).then((res) {
       if (res.statusCode != 200 || res.data == null) return null
       return res.data["data"]
+    })
+  }
+
+  fun qobuzFallback(artist: String, trackName: String) -> List {
+    if (artist.isNotEmpty) {
+      var combinedQuery = artist + " " + trackName
+      return searchRaw(combinedQuery).then((data) {
+        if (data == null || data.isEmpty) return Future.value([])
+        var allResults = Converter.toSpotubeMatchObject(data)
+        var matched = []
+        for (var c in allResults) {
+          if (titleMatches(trackName, c["title"] ?? "")) {
+            var resultArtist = (c["artists"] != null && c["artists"].isNotEmpty) ? c["artists"][0] : ""
+            if (artistMatches(artist, resultArtist)) {
+              matched.add(c)
+            }
+          }
+        }
+        if (matched.isNotEmpty) return matched
+        return Future.value([])
+      })
+    }
+    return trySearch(trackName).then((results) {
+      if (results == null || results.isEmpty) return Future.value([])
+      return results
     })
   }
 
@@ -139,27 +171,29 @@ class AudioSourceEndpoint {
       firstArtist = (a is Map) ? (a["name"] ?? "") : a.toString()
     }
     if (firstArtist.isEmpty) {
-      return Future.value([])
+      return qobuzFallback("", trackName)
     }
     var combinedQuery = firstArtist + " " + trackName
     return searchRawDeezer(combinedQuery).then((deezerData) {
       if (deezerData == null || deezerData.isEmpty) {
-        return Future.value([])
+        return qobuzFallback(firstArtist, trackName)
       }
       for (var d in deezerData) {
         var title = d["title"] ?? ""
+        var deezerArtist = (d["artist"] is Map) ? (d["artist"]["name"] ?? "") : (d["artist"] ?? "").toString()
+        if (!artistMatches(firstArtist, deezerArtist)) continue
         if (!titleMatches(trackName, title)) continue
         var isrc = d["isrc"] ?? ""
         if (isrc.isNotEmpty) {
           return searchRaw(isrc).then((qobuzData) {
             if (qobuzData == null || qobuzData.isEmpty) {
-              return Future.value([])
+              return qobuzFallback(firstArtist, trackName)
             }
             return Converter.toSpotubeMatchObject(qobuzData)
           })
         }
       }
-      return Future.value([])
+      return qobuzFallback(firstArtist, trackName)
     })
   }
 
@@ -179,7 +213,23 @@ class AudioSourceEndpoint {
     var artist = (match["artists"] != null && match["artists"].isNotEmpty) ? match["artists"][0] : ""
     if (artist is Map) artist = artist["name"] ?? ""
 
-    if (qobuzUrl.isEmpty) return Future.value(null)
+    if (qobuzUrl.isEmpty) {
+      var trackName = match["name"] ?? title
+      if (trackName.isEmpty) return Future.value(null)
+      var query = trackName
+      if (artist.isNotEmpty) query = artist + " " + trackName
+      return trySearch(query).then((results) {
+        if (results == null || results.isEmpty) return null
+        var first = results[0]
+        var newMatch = {
+          "externalUri": first["externalUri"] ?? "",
+          "title": first["title"] ?? trackName,
+          "artists": first["artists"] ?? match["artists"],
+          "isrc": match["isrc"] ?? "",
+        }
+        return buildStream(newMatch)
+      })
+    }
 
     return getToken().then((token) {
       if (token == null) return null
@@ -241,11 +291,50 @@ class AudioSourceEndpoint {
     })
   }
 
+  fun tryBuildStream(candidates: List, idx: int) -> List {
+    if (candidates == null || idx >= candidates.length) return Future.value([])
+    return buildStream(candidates[idx]).then((result) {
+      if (result != null) return [result]
+      return tryBuildStream(candidates, idx + 1)
+    })
+  }
+
+  fun trySearchAndBuild(artist: String, trackName: String) -> List {
+    if (artist.isEmpty || trackName.isEmpty) return Future.value([])
+    return searchRaw(artist).then((data) {
+      if (data == null || data.isEmpty) return Future.value([])
+      var results = Converter.toSpotubeMatchObject(data)
+      var candidates = []
+      for (var c in results) {
+        if (!titleMatches(trackName, c["title"] ?? "")) continue
+        candidates.add(c)
+      }
+      if (candidates.isNotEmpty) {
+        return tryBuildStream(candidates, 0)
+      }
+      return tryBuildStream(results, 0)
+    })
+  }
+
   fun streams(match: Map) -> List {
     if (match == null) return Future.value([])
-    return buildStream(match).then((stream) {
-      if (stream != null) return [stream]
-      return []
+    var url = match["externalUri"] ?? ""
+    var title = match["title"] ?? ""
+    var artist = (match["artists"] != null && match["artists"].isNotEmpty) ? match["artists"][0] : ""
+    if (artist is Map) artist = artist["name"] ?? ""
+
+    return buildStream(match).then((flacStream) {
+      var result = []
+      if (flacStream != null) result.add(flacStream)
+      if (url.isEmpty) return result.isEmpty ? [null] : result
+
+      return getToken().then((token) {
+        if (token == null) return result.isEmpty ? [null] : result
+        return queueAttempt(url, title, artist, token, 5).then((mp3Stream) {
+          if (mp3Stream != null) result.add(mp3Stream)
+          return result.isEmpty ? [null] : result
+        })
+      })
     })
   }
 }
