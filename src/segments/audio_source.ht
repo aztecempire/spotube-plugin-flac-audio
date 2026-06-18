@@ -215,6 +215,7 @@ class AudioSourceEndpoint {
       if (res.statusCode != 200 || res.data == null) return []
       if (res.data["formats"] == null) return []
       var ids = res.data["formats"].map((f) { return f["formatId"] }).toList()
+      ids = ids.where((id) { return id != null }).toList()
       ids.sort((a, b) {
         if (a > b) return -1
         if (a < b) return 1
