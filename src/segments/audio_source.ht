@@ -200,7 +200,7 @@ class AudioSourceEndpoint {
     })
   }
 
-  fun queueAttemptSingle(url: String, title: String, artist: String, token: String, formatId: int) -> Map {
+  fun queueAttempt(url: String, title: String, artist: String, token: String, formatId: int) -> Map {
     var hdrs = {
       "content-type": "application/json",
       "accept": "application/json, text/plain, */*",
@@ -219,6 +219,9 @@ class AudioSourceEndpoint {
       options: RequestOptions(headers: hdrs),
     ).then((queueRes) {
       if (queueRes.statusCode != 200 || queueRes.data == null || queueRes.data["id"] == null) {
+        if (formatId == 27) return queueAttempt(url, title, artist, token, 7)
+        if (formatId == 7) return queueAttempt(url, title, artist, token, 6)
+        if (formatId == 6) return queueAttempt(url, title, artist, token, 5)
         return null
       }
       return pollJob(queueRes.data["id"], 120, formatId)
@@ -260,15 +263,6 @@ class AudioSourceEndpoint {
     })
   }
 
-  fun collectFormats(url: String, title: String, artist: String, token: String, idx: int, collected: List) -> List {
-    var formatIds = [27, 7, 6, 5]
-    if (idx >= formatIds.length) return Future.value(collected.isEmpty ? [null] : collected)
-    return queueAttemptSingle(url, title, artist, token, formatIds[idx]).then((stream) {
-      if (stream != null) collected.add(stream)
-      return collectFormats(url, title, artist, token, idx + 1, collected)
-    })
-  }
-
   fun streams(match: Map) -> List {
     if (match == null) return Future.value([])
     var qobuzUrl = match["externalUri"] ?? ""
@@ -296,7 +290,17 @@ class AudioSourceEndpoint {
 
     return getToken().then((token) {
       if (token == null) return [null]
-      return collectFormats(qobuzUrl, title, artist, token, 0, [])
+      return queueAttempt(qobuzUrl, title, artist, token, 27).then((flacStream) {
+        var result = []
+        if (flacStream != null) result.add(flacStream)
+        return getToken().then((mp3Token) {
+          if (mp3Token == null) return result.isEmpty ? [null] : result
+          return queueAttempt(qobuzUrl, title, artist, mp3Token, 5).then((mp3Stream) {
+            if (mp3Stream != null) result.add(mp3Stream)
+            return result.isEmpty ? [null] : result
+          })
+        })
+      })
     })
   }
 }
