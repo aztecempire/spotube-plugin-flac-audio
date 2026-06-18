@@ -231,7 +231,7 @@ class AudioSourceEndpoint {
 
     return getToken().then((token) {
       if (token == null) return null
-      return queueAttempt(qobuzUrl, title, artist, token, 7)
+      return queueAttempt(qobuzUrl, title, artist, token, 27)
     })
   }
 
@@ -254,6 +254,7 @@ class AudioSourceEndpoint {
       options: RequestOptions(headers: hdrs),
     ).then((queueRes) {
       if (queueRes.statusCode != 200 || queueRes.data == null || queueRes.data["id"] == null) {
+        if (formatId == 27) return queueAttempt(url, title, artist, token, 7)
         if (formatId == 7) return queueAttempt(url, title, artist, token, 6)
         return null
       }
@@ -284,8 +285,8 @@ class AudioSourceEndpoint {
           stream["type"] = "lossless"
           stream["codec"] = "flac"
           stream["bitrate"] = 1411200
-          stream["sampleRate"] = formatId == 7 ? 96000 : 44100
-          stream["bitDepth"] = formatId == 7 ? 24 : 16
+          stream["sampleRate"] = formatId == 27 ? 192000 : (formatId == 7 ? 96000 : 44100)
+          stream["bitDepth"] = formatId == 27 ? 24 : (formatId == 7 ? 24 : 16)
         }
         return stream.toJson()
       }

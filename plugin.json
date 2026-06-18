@@ -1,5 +1,5 @@
 {
-  "version": "2.4.6",
+  "version": "2.4.7",
   "name": "Flac Downloader Audio",
   "author": "aztecempire",
   "description": "FLAC audio source plugin for Spotube using flacdownloader.com",
