@@ -209,6 +209,18 @@ class AudioSourceEndpoint {
     var artist = (match["artists"] != null && match["artists"].isNotEmpty) ? match["artists"][0] : ""
     if (artist is Map) artist = artist["name"] ?? ""
 
+    var formatId = 27
+    var quality = match["quality"]
+    if (quality is Map) {
+      var bd = quality["bitDepth"]
+      var sr = quality["sampleRate"]
+      if (bd == 24 && sr == 192000) formatId = 27
+      else if (bd == 24 && sr == 96000) formatId = 7
+      else if (bd == 24 && sr == 48000) formatId = 6
+      else if (bd == 16 && sr == 44100) formatId = 6
+      else if (bd == 16 && sr == 32000) formatId = 5
+    }
+
     if (qobuzUrl.isEmpty) {
       var trackName = match["name"] ?? title
       if (trackName.isEmpty) return Future.value(null)
@@ -229,7 +241,7 @@ class AudioSourceEndpoint {
 
     return getToken().then((token) {
       if (token == null) return null
-      return queueAttempt(qobuzUrl, title, artist, token, 27)
+      return queueAttempt(qobuzUrl, title, artist, token, formatId)
     })
   }
 
